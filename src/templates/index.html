@@ -1,0 +1,186 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Room</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #e1f5fe; /* Softer blue background */
+            margin: 0;
+        }
+        .chat-container {
+            width: 100%;
+            display: flex;
+            height: 100%;
+        }
+        .left-panel {
+            width: 30%;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .right-panel {
+            width: 70%;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        #messages {
+            height: 400px;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #00796b;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #004d40;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #b0bec5;
+            border-radius: 5px;
+            margin-top: 8px;
+            background-color: #f1f8e9;
+            height: 60px; /* Adjust this value to increase or decrease height */
+        }
+        h2, h3 {
+            color: #37474f;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="left-panel">
+            <h2>Chat Room</h2>
+            <button onclick="location.href='{{ url_for('user_bp.logout') }}'">Logout</button>
+            <h3>Available Rooms</h3>
+            <div id="list-rooms"></div>
+        </div>
+        <div class="right-panel">
+            <input id="room" placeholder="Enter room name" />
+            <br>
+            <button onclick="createRoom()">Create Room</button>
+            <br>
+            <input id="join_room" placeholder="Room name to join" />
+            <br>
+            <button onclick="joinRoom()">Join Room</button>
+            <br>
+            <button onclick="leaveRoom()">Leave Room</button>
+
+            <div id="messages"></div>
+
+            <input id="message_input" placeholder="Type a message..." />
+            <br>
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+    <script>
+        const socket = io();
+        let currentRoom = '';
+        let username = "{{ username }}"; // Ensure this is replaced with the actual username
+    
+        fetch('/get_rooms')
+            .then(response => response.json())
+            .then(data => {
+                const roomsDiv = document.getElementById('list-rooms');
+                roomsDiv.innerHTML = ""; // Clear existing rooms list
+                data.rooms.forEach(room => {
+                    roomsDiv.innerHTML += `<div>${room}</div>`;
+                });
+            });
+    
+        function createRoom() {
+            const roomName = document.getElementById('room').value;
+            if (roomName) {
+                fetch('/create_room', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room_name: roomName })
+                }).then(response => {
+                    if (response.ok) {
+                        alert('Room created!');
+                        location.reload(); // Reload to get updated room list
+                    } else {
+                        alert('Room already exists');
+                    }
+                });
+            }
+        }
+    
+        function joinRoom() {
+            const roomName = document.getElementById('join_room').value;
+            if (roomName && currentRoom !== roomName) {
+                if (currentRoom) {
+                    leaveRoom();
+                }
+                currentRoom = roomName;
+                socket.emit('join', { room: roomName, user: username });
+            }
+        }
+    
+        function leaveRoom() {
+            if (currentRoom) {
+                socket.emit('leave', { room: currentRoom, user: username });
+                currentRoom = '';
+                document.getElementById('messages').innerHTML = ''; // Clear messages
+            }
+        }
+    
+        function sendMessage() {
+            const messageInput = document.getElementById('message_input');
+            const message = messageInput.value;
+            if (message && currentRoom) {
+                socket.emit('send_message', { room: currentRoom, message: message, user: username });
+                messageInput.value = ''; // Clear input after sending
+            }
+        }
+    
+        socket.on('message', function(data) {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML += `<p><strong>${data.user}:</strong> ${data.content}</p>`;
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
+        });
+    
+        // New event listener to handle previous messages
+        socket.on('previous_messages', function(messages) {
+            const messagesDiv = document.getElementById('messages');
+            messages.forEach(msg => {
+                messagesDiv.innerHTML += `<p><strong>${msg.user}:</strong> ${msg.content}</p>`;
+            });
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
+        });
+    </script>
+    
+    
+</body>
+</html>
